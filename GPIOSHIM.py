@@ -1,6 +1,7 @@
 import board
 import digitalio
-import logging
+import pulseio
+import busio
 
 
 class GPIOSHIM:
@@ -32,8 +33,7 @@ class GPIOSHIM:
     def __init__(self):
         self.pin_config = {}
         self.mode = None
-        self._logger = logging.getLogger(__name__)
-
+        
     def setmode(self, mode):
         self.mode = mode
 
@@ -44,9 +44,7 @@ class GPIOSHIM:
         pass
 
     def setup(self, pin, mode, pull_up_down=None):
-        self._logger.info(f"Setting up pin {pin} with mode {mode} and pull_up_down {pull_up_down}")
         if mode == GPIOSHIM.OUT:
-            self._logger.info("setup OUTPUT pin")
             self.pin_config[pin] = digitalio.DigitalInOut(self.pin_mappings[pin])
             self.pin_config[pin].direction = digitalio.Direction.OUTPUT
         elif mode == GPIOSHIM.IN:
@@ -58,7 +56,6 @@ class GPIOSHIM:
                 self.pin_config[pin].pull = digitalio.Pull.DOWN
 
     def output(self, pin, state):
-        self._logger.info("setup output GPIO")
         if pin in self.pin_config:
             self.pin_config[pin].value = state
 
@@ -73,6 +70,38 @@ class GPIOSHIM:
         elif pin in self.pin_config:
             self.pin_config[pin].deinit()
             del self.pin_config[pin]
+
+    def set_i2c_bus(self, bus_number):
+        i2c = busio.I2C(self.pin_mappings[SDA], self.pin_mappings[SCL], frequency=100000)
+        self.pin_config[bus_number] = i2c
+
+    def write_i2c_block_data(self, bus_number, address, data):
+        if bus_number in self.pin_config:
+            device = self.pin_config[bus_number].get_device(address)
+            device.write(data)
+
+    def set_spi_bus(self, bus_number, sck_pin, mosi_pin, miso_pin):
+        spi = busio.SPI(self.pin_mappings[sck_pin], MOSI=self.pin_mappings[mosi_pin], MISO=self.pin_mappings[miso_pin])
+        self.pin_config[bus_number] = spi
+
+    def transfer_spi_data(self, bus_number, data):
+        if bus_number in self.pin_config:
+            with digitalio.DigitalInOut(self.pin_mappings[CS]) as cs:
+                cs.switch_to_output(value=True)
+                cs.value = False
+                response = bytearray(len(data))
+                self.pin_config[bus_number].write_readinto(data, response)
+                cs.value = True
+                return response
+
+    def set_pwm_frequency(self, pin, frequency):
+        if pin in self.pin_config:
+            pwm = pulseio.PWMOut(self.pin_mappings[pin], frequency=frequency)
+            self.pin_config[pin] = pwm
+
+    def set_pwm_duty_cycle(self, pin, duty_cycle):
+        if pin in self.pin_config:
+            self.pin_config[pin].duty_cycle = duty_cycle
 
 
 GPIO = GPIOSHIM()
