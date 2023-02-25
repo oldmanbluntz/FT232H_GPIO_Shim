@@ -1,5 +1,6 @@
 import board
 import digitalio
+import logging
 
 
 class GPIOSHIM:
@@ -30,15 +31,22 @@ class GPIOSHIM:
 
     def __init__(self):
         self.pin_config = {}
+        self.mode = None
+        self._logger = logging.getLogger(__name__)
 
     def setmode(self, mode):
-        pass
+        self.mode = mode
+
+    def getmode(self):
+        return self.mode
 
     def setwarnings(self, flag):
         pass
 
     def setup(self, pin, mode, pull_up_down=None):
+        self._logger.info(f"Setting up pin {pin} with mode {mode} and pull_up_down {pull_up_down}")
         if mode == GPIOSHIM.OUT:
+            self._logger.info("setup OUTPUT pin")
             self.pin_config[pin] = digitalio.DigitalInOut(self.pin_mappings[pin])
             self.pin_config[pin].direction = digitalio.Direction.OUTPUT
         elif mode == GPIOSHIM.IN:
@@ -50,6 +58,7 @@ class GPIOSHIM:
                 self.pin_config[pin].pull = digitalio.Pull.DOWN
 
     def output(self, pin, state):
+        self._logger.info("setup output GPIO")
         if pin in self.pin_config:
             self.pin_config[pin].value = state
 
@@ -57,8 +66,12 @@ class GPIOSHIM:
         if pin in self.pin_config:
             return self.pin_config[pin].value
 
-    def cleanup(self):
-        for pin in self.pin_config:
+    def cleanup(self, pin=None):
+        if pin is None:
+            for p in self.pin_config:
+                del self.pin_config[p]
+        elif pin in self.pin_config:
+            self.pin_config[pin].deinit()
             del self.pin_config[pin]
 
 
